@@ -1,0 +1,120 @@
+module ALU_4bit (A, B, M, S0, S1, F, C, N, Z, V);
+    input [3:0] A, B;
+    input M, S0, S1;             
+    output reg [3:0] F;          // result
+    output reg C, N, Z, V;       // Flags: Carry, Negative, Zero, Overflow
+
+    // Wires for each output
+    wire [3:0] and_out, or_out, xor_out, not_out;
+    wire [3:0] add_out, sub_out, inc_out, dec_out;
+    wire carry_out_add, carry_out_sub, carry_out_inc, carry_out_dec;
+
+    //  Logic Operations
+    assign and_out = A & B;
+    assign or_out = A | B;
+    assign xor_out = A ^ B;
+    assign not_out = ~A;
+
+    //  Arithmetic Operations
+    add_4 adder (A, B, 1'b0, add_out, carry_out_add);
+    sub_4 subtractor (A, B, sub_out, carry_out_sub);
+    inc_4 increment (A, inc_out, carry_out_inc);
+    dec_4 decrement (A, dec_out, carry_out_dec);
+
+  always @(*) begin
+    if (M == 0 && S1 == 0 && S0 == 0) begin           // AND
+        F = and_out;
+    end else if (M == 0 && S1 == 0 && S0 == 1) begin  // OR
+        F = or_out;
+    end else if (M == 0 && S1 == 1 && S0 == 0) begin  // XOR
+        F = xor_out;
+    end else if (M == 0 && S1 == 1 && S0 == 1) begin  // NOT
+        F = not_out;
+    end else if (M == 1 && S1 == 0 && S0 == 0) begin  // Addition
+        F = add_out;
+        C = carry_out_add;
+        V = carry_out_add ^ add_out[3];               //Overflow 
+    end else if (M == 1 && S1 == 0 && S0 == 1) begin  // Subtraction
+        F = sub_out;
+        C = carry_out_sub;
+        V = carry_out_sub ^ sub_out[3];               // Overflow 
+    end else if (M == 1 && S1 == 1 && S0 == 0) begin  // Increment
+        F = inc_out;
+        C = carry_out_inc;
+        V = carry_out_inc;                            //Overflow 
+    end else if (M == 1 && S1 == 1 && S0 == 1) begin  // Decrement
+        F = dec_out;
+        C = carry_out_dec;
+        V = carry_out_dec;                             // Overflow
+    end else begin
+        F = 4'b0000;
+    end
+  
+    Z = (F == 4'b0000);                   // Zero flag
+    N = F[3];                           // Negative flag 
+end
+endmodule
+
+// Full Adder Module 
+module FA (A, B, Cin, S, Cout);
+    input A, B, Cin;
+    output S, Cout;
+    wire w1, w2, w3;
+  
+    xor (S, A, B, Cin);    // S = A ^ B ^ Cin
+    and (w1, A, B);         // w1 = A & B
+    and (w2, A, Cin);       // w2 = A & Cin
+    and (w3, B, Cin);       // w3 = B & Cin
+    or (Cout, w1, w2, w3);  // Cout = (A & B | (A & Cin) | (B & Cin)
+endmodule
+
+// Addition Module 
+module add_4 (A, B, Cin, S, Cout);
+    input [3:0] A, B;
+    input Cin;
+    output [3:0] S;
+    output Cout;
+    wire [2:0] C;
+    FA U1 (A[0], B[0], Cin, S[0], C[0]);
+    FA U2 (A[1], B[1], C[0], S[1], C[1]);
+    FA U3 (A[2], B[2], C[1], S[2], C[2]);
+    FA U4 (A[3], B[3], C[2], S[3], Cout);
+endmodule
+
+// Subtraction Module 
+module sub_4 (A, B, S, Cout);
+    input [3:0] A, B;
+    output [3:0] S;
+    output Cout;
+    wire [3:0] B_not;
+    wire [2:0] C;
+    assign B_not = ~B;
+    FA U1 (A[0], B_not[0], 1'b1, S[0], C[0]);
+    FA U2 (A[1], B_not[1], C[0], S[1], C[1]);
+    FA U3 (A[2], B_not[2], C[1], S[2], C[2]);
+    FA U4 (A[3], B_not[3], C[2], S[3], Cout);
+endmodule
+
+// Increment Module
+module inc_4 (A, S, Cout);
+    input [3:0] A;
+    output [3:0] S;
+    output Cout;
+    wire [2:0] C;
+    FA U1 (A[0], 1'b1, 1'b0, S[0], C[0]);
+    FA U2 (A[1], 1'b0, C[0], S[1], C[1]);
+    FA U3 (A[2], 1'b0, C[1], S[2], C[2]);
+    FA U4 (A[3], 1'b0, C[2], S[3], Cout);
+endmodule
+
+// Decrement Module
+module dec_4 (A, S, Cout);
+    input [3:0] A;
+    output [3:0] S;
+    output Cout;
+    wire [2:0] C;
+    FA U1 (A[0], 1'b0, 1'b1, S[0], C[0]);
+    FA U2 (A[1], 1'b1, C[0], S[1], C[1]);
+    FA U3 (A[2], 1'b1, C[1], S[2], C[2]);
+    FA U4 (A[3], 1'b1, C[2], S[3], Cout);
+endmodule
